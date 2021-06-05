@@ -54,7 +54,6 @@ from helpers.handle_creds import (
     load_correct_creds, test_api_key
 )
 
-
 # for colourful logging to the console
 class txcolors:
     BUY = '\033[92m'
@@ -66,8 +65,11 @@ class txcolors:
 
 
 # tracks profit/loss each session
-global session_profit
+global session_profit, trades_won, trades_lost, is_bot_running
+trades_won = 0
+trades_lost = 0
 session_profit = 0
+is_bot_running = True
 
 
 # print with timestamps
@@ -140,7 +142,7 @@ def wait_for_price():
         # sleep for exactly the amount of time required
         time.sleep((timedelta(minutes=float(TIME_DIFFERENCE / RECHECK_INTERVAL)) - (datetime.now() - historical_prices[hsp_head]['BNB' + PAIR_WITH]['time'])).total_seconds())
 
-    print(f'Working...Session profit:{session_profit:.2f}% Est:${(QUANTITY * session_profit)/100:.2f}')
+    print(f'Working...Session profit:{session_profit:.2f}% Est:${(QUANTITY * MAX_COINS * session_profit)/100:.2f}')
 
     # retreive latest prices
     get_price()
@@ -231,7 +233,7 @@ def pause_bot():
         get_price(True)
 
         # pausing here
-        if hsp_head == 1: print(f'Paused...Session profit:{session_profit:.2f}% Est:${(QUANTITY * session_profit)/100:.2f}')
+        if hsp_head == 1: print(f'Paused...Session profit:{session_profit:.2f}% Est:${(QUANTITY * MAX_COINS * session_profit)/100:.2f}')
         time.sleep((TIME_DIFFERENCE * 60) / RECHECK_INTERVAL)
 
     else:
@@ -271,7 +273,11 @@ def convert_volume():
             pass
 
         # calculate the volume in coin from QUANTITY in USDT (default)
-        volume[coin] = float(QUANTITY / float(last_price[coin]['price']))
+        coin_last_price = float(last_price[coin]['price'])
+        if (coin_last_price == 0):
+            print(f"ERROR: coin price for {coin} is NULL!")
+        else:
+            volume[coin] = float(QUANTITY / coin_last_price)
 
         # define the volume with the correct step size
         if coin not in lot_size:
@@ -352,11 +358,13 @@ def buy():
 def sell_coins():
     '''sell coins that have reached the STOP LOSS or TAKE PROFIT threshold'''
 
-    global hsp_head, session_profit
+    global hsp_head, session_profit, trades_won, trades_lost
 
     last_price = get_price(False) # don't populate rolling window
     #last_price = get_price(add_to_historical=True) # don't populate rolling window
     coins_sold = {}
+
+    check_total_session_profit(coins_bought, last_price)
 
     for coin in list(coins_bought):
         # define stop loss and take profit
@@ -381,6 +389,18 @@ def sell_coins():
         if LastPrice < SL or LastPrice > TP and not USE_TRAILING_STOP_LOSS:
             print(f"{txcolors.SELL_PROFIT if PriceChange >= 0. else txcolors.SELL_LOSS}TP or SL reached, selling {coins_bought[coin]['volume']} {coin} - {BuyPrice} - {LastPrice} : {PriceChange-(TRADING_FEE*2):.2f}% Est:${(QUANTITY*(PriceChange-(TRADING_FEE*2)))/100:.2f}{txcolors.DEFAULT}")
 
+            if (PriceChange >= 0):
+                trades_won += 1
+                #simulating limit sell on Binance
+                #TODO: use config variable for this
+                LastPrice = TP
+                
+            else:
+                trades_lost += 1
+                #simulating stop limit sell on Binance
+                LastPrice = SL
+
+            PriceChange = float((LastPrice - BuyPrice) / BuyPrice * 100)
             # try to create a real order
             try:
 
@@ -408,7 +428,8 @@ def sell_coins():
                 if LOG_TRADES:
                     profit = ((LastPrice - BuyPrice) * coins_sold[coin]['volume'])* (1-(TRADING_FEE*2)) # adjust for trading fee here
                     write_log(f"Sell: {coins_sold[coin]['volume']} {coin} - {BuyPrice} - {LastPrice} Profit: {profit:.2f} {PriceChange-(TRADING_FEE*2):.2f}%")
-                    session_profit=session_profit + (PriceChange-(TRADING_FEE*2))
+                    write_log(f"trades won: {trades_won}, trades lost: {trades_lost}")
+                    session_profit=session_profit + (PriceChange-(TRADING_FEE*2))/MAX_COINS
             continue
 
         # no action; print once every TIME_DIFFERENCE
@@ -416,9 +437,35 @@ def sell_coins():
             if len(coins_bought) > 0:
                 print(f'TP or SL not yet reached, not selling {coin} for now {BuyPrice} - {LastPrice} : {txcolors.SELL_PROFIT if PriceChange >= 0. else txcolors.SELL_LOSS}{PriceChange-(TRADING_FEE*2):.2f}% Est:${(QUANTITY*(PriceChange-(TRADING_FEE*2)))/100:.2f}{txcolors.DEFAULT}')
 
+    # check if session target has been met
+    
     if hsp_head == 1 and len(coins_bought) == 0: print(f'Not holding any coins')
  
     return coins_sold
+
+
+def check_total_session_profit(coins_bought, last_price):
+    
+    #TODO: Add to config
+    SESSION_TAKE_PROFIT = 1
+    SESSION_TAKE_LOSS = -1
+    BUDGET = MAX_COINS * QUANTITY
+
+    global session_profit, is_bot_running
+    
+    TotalSessionChange = session_profit
+    for coin in list(coins_bought):
+        LastPrice = float(last_price[coin]['price'])
+        BuyPrice = float(coins_bought[coin]['bought_at'])
+        PriceChange = float((LastPrice - BuyPrice) / BuyPrice * 100)
+
+        TotalSessionChange = float(TotalSessionChange + (PriceChange/MAX_COINS))
+
+    print(f'ACTUAL session profit: {TotalSessionChange:.2f}% Est:${TotalSessionChange/100 * BUDGET:.2f}')
+    if (TotalSessionChange > SESSION_TAKE_PROFIT or TotalSessionChange < SESSION_TAKE_LOSS):
+        print(f'Session target %{TotalSessionChange:.2f} met or exceeded targets. Sell all coins now!')
+        is_bot_running = False
+        #TODO: call sell-remaining-coins
 
 
 def update_portfolio(orders, last_price, volume):
@@ -588,7 +635,7 @@ if __name__ == '__main__':
 
     # seed initial prices
     get_price()
-    while True:
+    while is_bot_running:
         orders, last_price, volume = buy()
         update_portfolio(orders, last_price, volume)
         coins_sold = sell_coins()
