@@ -273,11 +273,7 @@ def convert_volume():
             pass
 
         # calculate the volume in coin from QUANTITY in USDT (default)
-        coin_last_price = float(last_price[coin]['price'])
-        if (coin_last_price == 0):
-            print(f"ERROR: coin price for {coin} is NULL!")
-        else:
-            volume[coin] = float(QUANTITY / coin_last_price)
+        volume[coin] = float(QUANTITY / float(last_price[coin]['price']))
 
         # define the volume with the correct step size
         if coin not in lot_size:
@@ -462,7 +458,7 @@ def check_total_session_profit(coins_bought, last_price):
         TotalSessionChange = float(TotalSessionChange + (PriceChange/MAX_COINS))
 
     print(f'ACTUAL session profit: {TotalSessionChange:.2f}% Est:${TotalSessionChange/100 * BUDGET:.2f}')
-    if (TotalSessionChange > SESSION_TAKE_PROFIT or TotalSessionChange < SESSION_TAKE_LOSS):
+    if (TotalSessionChange >= SESSION_TAKE_PROFIT or TotalSessionChange <= SESSION_TAKE_LOSS):
         print(f'Session target %{TotalSessionChange:.2f} met or exceeded targets. Sell all coins now!')
         is_bot_running = False
         #TODO: call sell-remaining-coins
