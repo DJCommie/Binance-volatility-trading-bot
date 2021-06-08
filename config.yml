@@ -36,20 +36,20 @@ trading_options:
   MAX_COINS: 20
 
   # the amount of time in MINUTES to calculate the difference from the current price (minimum: 1).
-  TIME_DIFFERENCE: 1
+  TIME_DIFFERENCE: 5
 
   # Number of times to check for TP/SL during each TIME_DIFFERENCE (minimum: 1).
   # Don't spam the Binance API, you will be banned (max 1200 requests per minute per IP).
-  RECHECK_INTERVAL: 15
+  RECHECK_INTERVAL: 60
 
   # the difference in % between the first and second checks for the price.
-  CHANGE_IN_PRICE: 10
+  CHANGE_IN_PRICE: 0.5
 
   # define in % when to sell a coin that's not making a profit.
-  STOP_LOSS: 4
+  STOP_LOSS: 5
 
   # define in % when to take profit on a profitable coin.
-  TAKE_PROFIT: 0.75
+  TAKE_PROFIT: 1
 
   # Use custom tickers.txt list for filtering pairs.
   CUSTOM_LIST: True
@@ -58,12 +58,24 @@ trading_options:
   TICKERS_LIST: 'tickers_top_40.txt'
    
   # whether to use trailing stop loss or not; default is True
-  USE_TRAILING_STOP_LOSS: False
+  USE_TRAILING_STOP_LOSS: True
 
   # when hit TAKE_PROFIT, move STOP_LOSS to TRAILING_STOP_LOSS percentage points below TAKE_PROFIT hence locking in profit
   # when hit TAKE_PROFIT, move TAKE_PROFIT up by TRAILING_TAKE_PROFIT percentage points
-  TRAILING_STOP_LOSS: .4
+  TRAILING_STOP_LOSS: .2
   TRAILING_TAKE_PROFIT: .1
+
+  # whether to use total session profit thresholds for stopping the bot 
+  USE_SESSION_THRESHOLD: True
+
+  # define in % when to profit target has been met to stop the bot and sell all coins
+  SESSION_TAKE_PROFIT: 1
+  # define in % when to stop loss target has been met to stop the bot and sell all coins
+  SESSION_STOP_LOSS: 1
+
+  # whether to tell Binance to sell at the exact TP or SL price
+  # cannot be used with USE_TRAILING_STOP_LOSS but gaurantees sale price and avoids potential loss due to API delay
+  USE_BINANCE_LIMIT_SELL: False
   
   # Trading fee in % per trade.
   # If using 0.75% (using BNB for fees) you must have BNB in your account to cover trading fees.
@@ -74,5 +86,6 @@ trading_options:
     #- pausebotmod
     #- signalsamplemod
     - custsignalmod
+    - buysellcustsignalmod
     
   

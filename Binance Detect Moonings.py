@@ -147,6 +147,9 @@ def wait_for_price():
     # retreive latest prices
     get_price()
 
+    externals = external_signals()
+    exnumber = 0
+
     # calculate the difference in prices
     for coin in historical_prices[hsp_head]:
 
@@ -157,7 +160,7 @@ def wait_for_price():
         threshold_check = (-1.0 if min_price[coin]['time'] > max_price[coin]['time'] else 1.0) * (float(max_price[coin]['price']) - float(min_price[coin]['price'])) / float(min_price[coin]['price']) * 100
 
         # each coin with higher gains than our CHANGE_IN_PRICE is added to the volatile_coins dict if less than MAX_COINS is not reached.
-        if threshold_check > CHANGE_IN_PRICE:
+        if coin in externals and threshold_check > CHANGE_IN_PRICE:
             coins_up +=1
 
             if coin not in volatility_cooloff:
@@ -184,14 +187,12 @@ def wait_for_price():
     #print(f'Up: {coins_up} Down: {coins_down} Unchanged: {coins_unchanged}')
 
     # Here goes new code for external signalling
-    externals = external_signals()
-    exnumber = 0
 
-    for excoin in externals:
+    '''for excoin in externals:
         if excoin not in volatile_coins and excoin not in coins_bought and (len(coins_bought) + exnumber) < MAX_COINS:
             volatile_coins[excoin] = 1
             exnumber +=1
-            print(f'External signal received on {excoin}, calculating volume in {PAIR_WITH}')
+            print(f'External signal received on {excoin}, calculating volume in {PAIR_WITH}')'''
 
     return volatile_coins, len(volatile_coins), historical_prices[hsp_head]
 
@@ -213,6 +214,22 @@ def external_signals():
 
     return external_list
 
+def sell_external_signals():
+    external_list = {}
+    signals = {}
+
+    # check directory and load pairs from files into external_list
+    signals = glob.glob("signals/*.sell")
+    for filename in signals:
+        for line in open(filename):
+            symbol = line.strip()
+            external_list[symbol] = symbol
+        try:
+            os.remove(filename)
+        except:
+            if DEBUG: print(f'{txcolors.WARNING}Could not remove external signalling file{txcolors.DEFAULT}')
+
+    return external_list
 
 def pause_bot():
     '''Pause the script when exeternal indicators detect a bearish trend in the market'''
@@ -356,11 +373,15 @@ def sell_coins():
 
     global hsp_head, session_profit, trades_won, trades_lost
 
+    externals = sell_external_signals()
     last_price = get_price(False) # don't populate rolling window
     #last_price = get_price(add_to_historical=True) # don't populate rolling window
     coins_sold = {}
 
-    check_total_session_profit(coins_bought, last_price)
+    if USE_SESSION_THRESHOLD:
+        check_total_session_profit(coins_bought, last_price)
+
+    #TODO: call sell_external_signals() here
 
     for coin in list(coins_bought):
         # define stop loss and take profit
@@ -382,21 +403,21 @@ def sell_coins():
             continue
 
         # check that the price is below the stop loss or above take profit (if trailing stop loss not used) and sell if this is the case
-        if LastPrice < SL or LastPrice > TP and not USE_TRAILING_STOP_LOSS:
+        if coin in externals or LastPrice < SL or LastPrice > TP and not USE_TRAILING_STOP_LOSS:
             print(f"{txcolors.SELL_PROFIT if PriceChange >= 0. else txcolors.SELL_LOSS}TP or SL reached, selling {coins_bought[coin]['volume']} {coin} - {BuyPrice} - {LastPrice} : {PriceChange-(TRADING_FEE*2):.2f}% Est:${(QUANTITY*(PriceChange-(TRADING_FEE*2)))/100:.2f}{txcolors.DEFAULT}")
 
-            if (PriceChange >= 0):
+            if PriceChange >= 0:
                 trades_won += 1
-                #simulating limit sell on Binance
-                #TODO: use config variable for this
-                LastPrice = TP
-                
+                if USE_BINANCE_LIMIT_SELL:
+                    LastPrice = TP
             else:
                 trades_lost += 1
-                #simulating stop limit sell on Binance
-                LastPrice = SL
-
-            PriceChange = float((LastPrice - BuyPrice) / BuyPrice * 100)
+                if USE_BINANCE_LIMIT_SELL:
+                    LastPrice = SL
+            
+            if USE_BINANCE_LIMIT_SELL:
+                PriceChange = float((LastPrice - BuyPrice) / BuyPrice * 100)
+            
             # try to create a real order
             try:
 
@@ -442,9 +463,6 @@ def sell_coins():
 
 def check_total_session_profit(coins_bought, last_price):
     
-    #TODO: Add to config
-    SESSION_TAKE_PROFIT = 1
-    SESSION_TAKE_LOSS = -1
     BUDGET = MAX_COINS * QUANTITY
 
     global session_profit, is_bot_running
@@ -455,10 +473,10 @@ def check_total_session_profit(coins_bought, last_price):
         BuyPrice = float(coins_bought[coin]['bought_at'])
         PriceChange = float((LastPrice - BuyPrice) / BuyPrice * 100)
 
-        TotalSessionChange = float(TotalSessionChange + (PriceChange/MAX_COINS))
+        TotalSessionChange = float(TotalSessionChange + (PriceChange - (TRADING_FEE*2))/MAX_COINS)
 
     print(f'ACTUAL session profit: {TotalSessionChange:.2f}% Est:${TotalSessionChange/100 * BUDGET:.2f}')
-    if (TotalSessionChange >= SESSION_TAKE_PROFIT or TotalSessionChange <= SESSION_TAKE_LOSS):
+    if (TotalSessionChange >= SESSION_TAKE_PROFIT or TotalSessionChange <= -SESSION_STOP_LOSS):
         print(f'Session target %{TotalSessionChange:.2f} met or exceeded targets. Sell all coins now!')
         is_bot_running = False
         #TODO: call sell-remaining-coins
@@ -545,6 +563,11 @@ if __name__ == '__main__':
     TRAILING_TAKE_PROFIT = parsed_config['trading_options']['TRAILING_TAKE_PROFIT']
     TRADING_FEE = parsed_config['trading_options']['TRADING_FEE']
     SIGNALLING_MODULES = parsed_config['trading_options']['SIGNALLING_MODULES']
+    USE_SESSION_THRESHOLD = parsed_config['trading_options']['USE_SESSION_THRESHOLD']
+    SESSION_TAKE_PROFIT = parsed_config['trading_options']['SESSION_TAKE_PROFIT']
+    SESSION_STOP_LOSS = parsed_config['trading_options']['SESSION_STOP_LOSS']
+    USE_BINANCE_LIMIT_SELL = parsed_config['trading_options']['USE_BINANCE_LIMIT_SELL']
+
     if DEBUG_SETTING or args.debug:
         DEBUG = True
 

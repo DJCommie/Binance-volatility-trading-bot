@@ -23,8 +23,9 @@ TICKERS = 'custsignal.txt' #'signalsample.txt'
 TIME_TO_WAIT = 5 # Minutes to wait between analysis
 FULL_LOG = False # List analysis result to console
 
+# TODO: check every 1 minute on 5 minute timeframes by keeping a circular buffer array 
 global last_RSI
-last_RSI = 0
+last_RSI = {}
 
 def analyze(pairs):
     global last_RSI
@@ -62,7 +63,9 @@ def analyze(pairs):
             if analysis.oscillators ['COMPUTE'][indicator] != 'SELL': oscCheck +=1
       	
         for indicator in MA_INDICATORS:
-            if analysis.moving_averages ['COMPUTE'][indicator] == 'BUY': maCheck +=1		
+            if analysis.moving_averages ['COMPUTE'][indicator] == 'BUY': maCheck +=1
+
+        #TODO: Use same type of analysis for sell indicators
 
         # Stoch.RSI (25 - 52) & Stoch.RSI.K > Stoch.RSI.D, RSI (49-67), EMA10 > EMA20 > EMA100, Stoch.RSI = BUY, RSI = BUY, EMA10 = EMA20 = BUY
         RSI = float(analysis.indicators['RSI'])
@@ -74,8 +77,8 @@ def analyze(pairs):
         STOCH_K = float(analysis.indicators['Stoch.K'])
         STOCH_D = float(analysis.indicators['Stoch.D'])
 
-        #print(f'Custsignalmod: {pair} stats = RSI:{RSI}, STOCH_RSI_K:{STOCH_RSI_K}, EMA10:{EMA10}, EMA20:{EMA20}, EMA100:{EMA100}')
-        if last_RSI != 0 and (RSI - last_RSI >= 2.5) and (RSI >= 49 and RSI <= 67) and (STOCH_RSI_K >= 25 and STOCH_RSI_K <= 58) and \
+        #print(f'Custsignalmod: {pair} stats = RSI:{RSI}, STOCH_RSI_K:{STOCH_RSI_K}, STOCH_K:{STOCH_K}, STOCH_D:{STOCH_D} EMA10:{EMA10}, EMA20:{EMA20}, EMA100:{EMA100}')
+        if pair in last_RSI and (RSI - last_RSI[pair] >= 2.5) and (RSI >= 49 and RSI <= 67) and (STOCH_RSI_K >= 25 and STOCH_RSI_K <= 58) and \
             '''(EMA10 > EMA20 and EMA20 > EMA100)''' and (STOCH_K - STOCH_D >= 4.5):
 
             if oscCheck >= OSC_THRESHOLD and maCheck >= MA_THRESHOLD:
@@ -84,7 +87,7 @@ def analyze(pairs):
                 with open('signals/custsignalmod.exs','a+') as f:
                     f.write(pair + '\n')
 
-        last_RSI = RSI
+        last_RSI[pair] = RSI
         #if FULL_LOG:
         print(f'Custsignalmod:{pair} Oscillators:{oscCheck}/{len(OSC_INDICATORS)} Moving averages:{maCheck}/{len(MA_INDICATORS)}')
     
