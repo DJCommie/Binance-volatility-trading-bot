@@ -49,7 +49,7 @@ trading_options:
   STOP_LOSS: 5
 
   # define in % when to take profit on a profitable coin.
-  TAKE_PROFIT: 1
+  TAKE_PROFIT: 0.75
 
   # Use custom tickers.txt list for filtering pairs.
   CUSTOM_LIST: True
@@ -85,7 +85,8 @@ trading_options:
   SIGNALLING_MODULES:
     #- pausebotmod
     #- signalsamplemod
-    - custsignalmod
-    - buysellcustsignalmod
+    #- ta_indicator_signalmod_firewatch
+    - rsi-mod_nigec
+    #- rsi_stoch_signalmod_djcommie
     
   
