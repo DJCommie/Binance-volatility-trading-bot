@@ -97,13 +97,13 @@ def analyze(pairs):
                 taMax = first_tacheck
                 taMaxCoin = pair
         
-        '''if (first_recommendation == "BUY" or first_recommendation == "STRONG_BUY") and (second_recommendation == "BUY" or second_recommendation == "STRONG_BUY") and \
+        if (first_recommendation == "BUY" or first_recommendation == "STRONG_BUY") and (second_recommendation == "BUY" or second_recommendation == "STRONG_BUY") and \
             (third_recommendation == "BUY" or third_recommendation == "STRONG_BUY"):
                 if first_RSI <= 67 and second_RSI <= 67 and third_RSI <= 67:
                     signal_coins[pair] = pair
                     print(f'buysellcustsignal: Buy Signal detected on {pair}')
                     with open('signals/signalsample.exs','a+') as f:
-                        f.write(pair + '\n')'''
+                        f.write(pair + '\n')
         
         if (first_recommendation == "SELL" or first_recommendation == "STRONG_SELL") and (second_recommendation == "SELL" or second_recommendation == "STRONG_SELL") and \
             (third_recommendation == "SELL" or third_recommendation == "STRONG_SELL"):
